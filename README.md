@@ -3,7 +3,7 @@ Script that pulls songs of a specific genre from playlists
 
 # How To Use It
 
-1.) Retrieve your sp_dc spotify cookie. This cookie has an expiration time of 1 year 
+1.) Retrieve your sp_dc spotify cookie. This cookie has an expiration time of 1 year ( Do this from your chrome developer mode or in an other way)
 
 2.) Place the cookie together with your playlists and genres into the config file ( if you want to scrape your liked songs put the value of "playlist_link_scrape"
 
