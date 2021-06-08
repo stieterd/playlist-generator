@@ -33,6 +33,7 @@ class SpotifyUser:
 		# Calling functions to initialize some class vars
 
 		self.get_token(auth_cookie)
+		self.username = self.get_user_info()['id']
 
 	def get_token(self, cookie):
 
@@ -59,7 +60,7 @@ class SpotifyUser:
 
 	def get_id_from_item(self, item, name):
 
-		url = f"https://spclient.wg.spotify.com/searchview/km/v4/search/{name}?entityVersion=2&limit=10&imageSize=large&catalogue=&country=NL&username=stieterd&locale=nl&platform=web"
+		url = f"https://spclient.wg.spotify.com/searchview/km/v4/search/{name}?entityVersion=2&limit=10&imageSize=large&catalogue=&country=NL&username={self.username}&locale=nl&platform=web"
 		resp = requests.get(url, headers=self.headers).json()
 
 		return resp['results'][item]['hits'][0]['uri'].split(':')[2]
@@ -111,7 +112,7 @@ class SpotifyUser:
 
 	def confirm_playlist(self, uri):
 
-		url = "https://spclient.wg.spotify.com/playlist/v2/user/stieterd/rootlist/changes"
+		url = f"https://spclient.wg.spotify.com/playlist/v2/user/{self.username}/rootlist/changes"
 
 		headers = {	'content-length': "99",
 					'content-type': "application/json;charset=UTF-8"}
@@ -138,12 +139,11 @@ class SpotifyUser:
 
 		return resp
 
-	def get_playlists_for_me(self):
+	def get_playlists_for_me(self):	
 
-		url = "https://spclient.wg.spotify.com/playlist/v2/user/stieterd/rootlist?"
+		url = f"https://spclient.wg.spotify.com/playlist/v2/user/{self.username}/rootlist?"
 		params = {  'decorate': 'revision,length,attributes,timestamp,owner',
 					'revision': ''}
-
 		resp = requests.get(url, params=params, headers=self.headers).json()
 		playlists = resp['contents']
 
@@ -151,13 +151,21 @@ class SpotifyUser:
 
 	def get_revision(self):
 
-		url = "https://spclient.wg.spotify.com/playlist/v2/user/stieterd/rootlist?"
+		url = f"https://spclient.wg.spotify.com/playlist/v2/user/{self.username}/rootlist?"
 		params = {  'decorate': 'revision,length,attributes,timestamp,owner',
 					'revision': ''}
 
 		resp = requests.get(url, params=params, headers=self.headers).json()
 		
 		return resp['revision']
+
+	def get_single_track(self):
+
+		url = "https://api.spotify.com/v1/tracks/3JWiDGQX2eTlFvKj3Yssj3"
+
+		resp = requests.get(url, headers=self.headers).json()
+
+		return resp
 
 class SpotifyTinkerer(SpotifyUser):
 
@@ -172,8 +180,6 @@ class SpotifyTinkerer(SpotifyUser):
 		for idx, play in enumerate(my_playlists['metaItems']):
 
 			if name == play['attributes']['name']:
-
-				print("OK")
 
 				playlist_uri = my_playlists['items'][idx]['uri']
 				playlist_id = playlist_uri.split(":")[2]
@@ -195,7 +201,7 @@ class SpotifyTinkerer(SpotifyUser):
 
 		return pl
 
-	def divide_into_genres(self, playlist="liked"):
+	def divide_into_genres(self, popularity_threshold, playlist="liked"):
 
 		songs_divided = {}
 
@@ -211,29 +217,34 @@ class SpotifyTinkerer(SpotifyUser):
 
 			song = i_song['track']
 
-			artist = song['artists'][0]
+			if song == None:
+				continue
+				
+			if popularity_threshold < song['popularity']:
 
-			genres = super().get_artist_by_id(artist['id'])['genres'] # TEMP
-			artist_about = {'name': artist['name'], 'id':artist['id'], 'uri':artist['uri'], 'genres':genres} # TEMP
+				artist = song['artists'][0]
 
-			song_about = {'name': song['name'], 'id':song['id'], 'uri':song['uri'],'artist':artist_about} # Only important dictionary
+				genres = super().get_artist_by_id(artist['id'])['genres'] # TEMP
+				artist_about = {'name': artist['name'], 'id':artist['id'], 'uri':artist['uri'], 'genres':genres} # TEMP
 
-			genres = song_about['artist']['genres'] # Reusing genres var
+				song_about = {'name': song['name'], 'popularity': song['popularity'], 'id':song['id'], 'uri':song['uri'],'artist':artist_about} # Only important dictionary
 
-			for key in songs_divided:
+				genres = song_about['artist']['genres'] # Reusing genres var
+
+				for key in songs_divided:
+
+					for genre in genres:
+						if genre == key:
+							songs_divided[key].append(song_about)
+							genres.remove(genre)
 
 				for genre in genres:
-					if genre == key:
-						songs_divided[key].append(song_about)
-						genres.remove(genre)
 
-			for genre in genres:
-
-				songs_divided[genre] = [song_about]
+					songs_divided[genre] = [song_about]
 
 		return songs_divided
 
-	def push_songs_in_playlist(self, playlist, song_dict, acceptable_genres):
+	def push_songs_in_playlist(self, playlist, song_dict, acceptable_genres = "all"):
 
 		temp_songs = super().get_playlist(playlist['id'])
 		used_songs = [ x['track']['uri'] for x in temp_songs]
@@ -242,9 +253,13 @@ class SpotifyTinkerer(SpotifyUser):
 
 			use_these_songs = False
 
-			for ac in acceptable_genres:
-				if ac in genre:
-					use_these_songs = True
+			if acceptable_genres == "all":
+				use_these_songs = True
+
+			else:
+				for ac in acceptable_genres:
+					if ac in genre:
+						use_these_songs = True
 
 			if use_these_songs:
 
@@ -255,13 +270,18 @@ class SpotifyTinkerer(SpotifyUser):
 	
 if __name__ == '__main__':
 
+	
 	with open("config.json", "r") as f:
 
 		config = json.load(f)
 
+	if config["sp_dc_auth_cookie"] == "":
+		exit()
+
 	spotf = SpotifyTinkerer(config["sp_dc_auth_cookie"])
-	
-	songs_from_playlist = spotf.divide_into_genres(config["playlist_link_scrape"]) # Link to a playlist or liked( for liked songs )
+
+
+	songs_from_playlist = spotf.divide_into_genres(config["popularity_threshold"], config["playlist_link_scrape"]) # Link to a playlist or liked( for liked songs )
 	
 	with open('genres_chosen_playlist.json', 'w') as f:
 
@@ -273,3 +293,4 @@ if __name__ == '__main__':
 		spotf.push_songs_in_playlist(created_pl, songs_from_playlist, config["genres"])
 
 	print("DONE!")
+	

@@ -1,6 +1,7 @@
 {	
 	"sp_dc_auth_cookie": "",
-	"playlist_link_scrape": "liked", 
-	"genres": ["rap","hip hop"],
-	"playlist_name_push": null 
+	"playlist_link_scrape": "https://open.spotify.com/playlist/37i9dQZF1DZ06evO1kxsTC?si=89c5fa34212249b6", 
+	"genres": "all",
+	"playlist_name_push": "fawaka",
+	"popularity_threshold": 75
 }
